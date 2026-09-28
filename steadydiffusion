@@ -1,0 +1,94 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+L, H = 1.0, 0.5          # size of the plate
+Nx, Ny = 30, 15          # number of grid cells
+dx, dy = L / Nx, H / Ny
+
+x = np.linspace(dx / 2, L - dx / 2, Nx)   # x position of each cell's center
+y = np.linspace(dy / 2, H - dy / 2, Ny)   # y position of each cell's center
+
+# ---------------- 2) Boundary conditions and source ----------------
+T_bottom = 15
+T_top = 10
+S = -1.5                                   # heat source which is same everywhere
+
+def k(x):                                  # conductivity- it only varies with x
+    return 16 * (x / L + 1)
+
+def T_right(y):                            # temperature along the right edge
+    return 5 * (1 - y / H) + 15 * np.sin(np.pi * y / H)
+
+
+# ---------------- 3) Gauss-Seidel solve ----------------
+T = np.full((Nx, Ny), 10.0)                # initial guess for every cell
+residuals = []                             # how much T changes each sweep
+
+for iteration in range(5000):
+    max_change = 0.0
+
+    for i in range(Nx):
+        for j in range(Ny):
+            kP = k(x[i])                   # conductivity of this cell
+
+            # Look at each of the 4 neighbors: get its temperature and
+      # how easily heat can flow to/from it ("a" = conductance).
+
+            if i < Nx - 1:                             # neighbor to the East
+                T_E, a_E = T[i + 1, j], (kP + k(x[i + 1])) / 2 * dy / dx
+            else:                                       # East = right boundary
+                T_E, a_E = T_right(y[j]), kP * dy / (dx / 2)
+
+            if i > 0:                                   # neighbor to the West
+                T_W, a_W = T[i - 1, j], (kP + k(x[i - 1])) / 2 * dy / dx
+            else:                                       # West = insulated boundary
+                T_W, a_W = 0.0, 0.0                     # no heat enters here
+
+            if j < Ny - 1:                               # neighbor to the North
+                T_N, a_N = T[i, j + 1], kP * dx / dy
+            else:                                        # North = top boundary
+                T_N, a_N = T_top, kP * dx / (dy / 2)
+
+            if j > 0:                                    # neighbor to the South
+                T_S, a_S = T[i, j - 1], kP * dx / dy
+            else:                                        # South = bottom boundary
+                T_S, a_S = T_bottom, kP * dx / (dy / 2)
+
+            # Heat balance for this cell: heat in from all 4 sides + source = 0
+            # Solve that balance for this cell's new temperature:
+            T_new = (a_E*T_E + a_W*T_W + a_N*T_N + a_S*T_S + S*dx*dy) / (a_E+a_W+a_N+a_S)
+
+            max_change = max(max_change, abs(T_new - T[i, j]))
+            T[i, j] = T_new
+
+    residuals.append(max_change)
+    if max_change < 1e-4:                  # stop once T barely changes anymore
+        break
+
+print(f"Converged after {len(residuals)} iterations")
+
+
+# ---------------- 4) Plot the temperature ----------------
+plt.figure()
+plt.contourf(x, y, T.T, levels=20, cmap="inferno")
+plt.colorbar(label="Temperature")
+plt.xlabel("x"); plt.ylabel("y"); plt.title("Temperature distribution")
+
+# ---------------- 5) Plot how fast it converged ----------------
+plt.figure()
+plt.semilogy(residuals)
+plt.xlabel("Iteration"); plt.ylabel("Residual (biggest change in one sweep)")
+plt.title("Convergence history")
+
+
+# ---------------- 6) Plot the heat flux (Eq. 2: q = -k * dT/dx, -k * dT/dy) ----------------
+dTdx, dTdy = np.gradient(T, x, y)
+qx = -k(x)[:, None] * dTdx
+qy = -k(x)[:, None] * dTdy
+
+plt.figure()
+plt.contourf(x, y, T.T, levels=20, cmap="inferno", alpha=0.6)
+plt.colorbar(label="Temperature")
+plt.quiver(x, y, qx.T, qy.T, color="white")
+plt.xlabel("x"); plt.ylabel("y"); plt.title("Heat flux vectors")
