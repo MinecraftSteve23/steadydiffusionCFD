@@ -1,0 +1,1 @@
+Google/Gemini was used for finding a function to display the temperature gradient with high detail. Additionally the number of iterations reqd for gauss seidel was estimated by asking gemini the nominal number in general.
